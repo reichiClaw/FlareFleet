@@ -315,6 +315,20 @@ Deployments are atomic; users keep their sessions.
 | Rotate all sessions | delete the keys with prefix `session:` in the KV namespace (dashboard → KV) |
 | Reset a locked-out super admin | `npx wrangler d1 execute flarefleet-db --remote --command "UPDATE users SET is_active=1, failed_logins=0, locked_until=NULL WHERE email='you@example.com'"` then use *Forgot password* (needs e-mail) or have another super admin reset it |
 
+### Troubleshooting
+
+The UI shows a generic "Unexpected error" for any server-side failure; the
+real cause is in the Worker logs: dashboard → Workers & Pages → your Worker →
+**Logs** (live), or `npm run tail` locally. Common ones:
+
+| Symptom / log line | Cause | Fix |
+|---|---|---|
+| `no such table: users` | Migrations not applied | `npm run db:migrate` (Deploy button: check the build log of the deploy step) |
+| `Pbkdf2 failed: iterations too high` | `PBKDF2_ITERATIONS` above 100000 | Set it to 100000 or less (default 20000) |
+| `Worker exceeded CPU time limit` on login/setup | `PBKDF2_ITERATIONS` too high for the free plan | Lower it to 20000 |
+| `E_SENDER_NOT_VERIFIED` / `E_SENDER_DOMAIN_NOT_AVAILABLE` | Sender domain not onboarded in Email Service | Onboard the domain or set `EMAIL_ENABLED` to `false` |
+| Uploads fail with an R2 error | R2 not enabled on the account | Enable R2 once in the dashboard, redeploy |
+
 ### Multiple environments (optional)
 
 To run a staging copy, add an environment block to `wrangler.jsonc` with its

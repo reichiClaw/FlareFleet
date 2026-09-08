@@ -22,7 +22,10 @@
     // Sender address for e-mails. Must belong to a domain onboarded in Cloudflare Email Service.
     "EMAIL_FROM": "fleet@example.com",
     // Set to "false" to disable e-mail sending entirely.
-    "EMAIL_ENABLED": "true"
+    "EMAIL_ENABLED": "true",
+    // Password hashing cost. Workers cap PBKDF2 at 100000; the free plan's 10 ms CPU
+    // budget fits about 20000. Raise on a paid plan. Existing users are re-hashed on login.
+    "PBKDF2_ITERATIONS": "20000"
   },
 
   "d1_databases": [

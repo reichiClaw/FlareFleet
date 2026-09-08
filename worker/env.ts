@@ -23,6 +23,7 @@ export interface Env {
   PUBLIC_BASE_URL: string;
   EMAIL_FROM: string;
   EMAIL_ENABLED: string;
+  PBKDF2_ITERATIONS?: string;
 }
 
 export interface SessionUser {
