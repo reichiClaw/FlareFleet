@@ -69,6 +69,7 @@ worker/            Hono API, Durable Object, cron handlers
 web/               React SPA (pages, components, i18n, api client)
 shared/            types, Zod schemas, status machine and capability rules (used by both sides)
 migrations/        D1 SQL migrations
+scripts/           setup-cloudflare.mjs installer
 docs/              Specification (design target; see note below)
 wrangler.jsonc     Worker configuration and bindings
 ```
@@ -85,7 +86,37 @@ of Queues, and drafts/reservations are not implemented.
 ## Deployment manual (Cloudflare)
 
 You need: a Cloudflare account, Node.js 20+, and (for e-mail) a domain whose
-DNS is managed by Cloudflare. Total setup is about 15 minutes.
+DNS is managed by Cloudflare.
+
+### Quick install (script)
+
+```bash
+git clone <this repository> flarefleet
+cd flarefleet
+npm install
+npm run setup:cloudflare
+```
+
+The installer logs you in (opens the browser if needed), creates the D1
+database, KV namespace and R2 bucket (or reuses existing ones), writes their
+ids into `wrangler.jsonc`, asks for the public URL and e-mail sender, applies
+the migrations, builds and deploys. It ends with the URL to open for the
+setup screen. Re-running it is safe; it only creates what is missing.
+
+Non-interactive use (CI, scripted installs):
+
+```bash
+npm run setup:cloudflare -- --yes                                  # workers.dev URL, e-mail off
+npm run setup:cloudflare -- --yes --base-url https://fleet.example.com --email-from fleet@example.com
+npm run setup:cloudflare -- --skip-deploy                          # resources + config only
+```
+
+If R2 has never been used on the account the script stops and asks you to
+enable it once in the dashboard (**R2 Object Storage → Get started**, free),
+then run it again. E-mail additionally needs the sender domain onboarded
+(step 5 below); the script reminds you.
+
+The manual steps below do the same thing by hand.
 
 ### 1. Install and log in
 
@@ -270,6 +301,7 @@ Useful scripts:
 | `npm run build` | production build into `dist/` |
 | `npm run preview` | serve the production build locally |
 | `npm run cf-typegen` | regenerate Worker binding types from `wrangler.jsonc` |
+| `npm run setup:cloudflare` | guided Cloudflare installer (see deployment manual) |
 
 ## Using the app (quick tour)
 
