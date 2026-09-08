@@ -23,9 +23,6 @@ export interface Env {
   PUBLIC_BASE_URL: string;
   EMAIL_FROM: string;
   EMAIL_ENABLED: string;
-  SESSION_SECRET?: string;
-  SUPER_ADMIN_EMAIL?: string;
-  SUPER_ADMIN_PASSWORD?: string;
 }
 
 export interface SessionUser {

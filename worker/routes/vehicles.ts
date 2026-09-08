@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import QRCode from "qrcode";
 import type { AuditEntry, Damage, Protocol } from "@shared/types";
 import {
   ArchiveSchema,
@@ -21,6 +20,7 @@ import { parseBody } from "../lib/validate";
 import { requireAuth, type AppContext } from "../lib/auth";
 import { all, json, now, stmt } from "../lib/db";
 import { loadSettings } from "../lib/settings";
+import { qrSvg } from "../lib/qr";
 import { audit } from "../lib/audit";
 import { createVehicle, getVehicle, getVehicleRow, listLoansForVehicle, listVehicles, updateVehicle } from "../services/vehicles";
 import * as wf from "../services/workflows";
@@ -106,14 +106,12 @@ vehicles.get("/:id/timeline", async (c) => {
   return c.json({ items, photos: photos.map(toMediaItem) });
 });
 
-vehicles.get("/:id/qr.png", async (c) => {
+vehicles.get("/:id/qr.svg", async (c) => {
   const v = await getVehicleRow(c.env, c.req.param("id"));
   const settings = await loadSettings(c.env);
   const base = settings.public_base_url || c.env.PUBLIC_BASE_URL;
-  const url = `${base}/q/${v.qr_code}`;
-  const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 1, errorCorrectionLevel: "M" });
-  const bytes = Uint8Array.from(atob(dataUrl.split(",")[1]), (ch) => ch.charCodeAt(0));
-  return new Response(bytes, { headers: { "content-type": "image/png", "cache-control": "private, max-age=3600" } });
+  const svg = qrSvg(`${base}/q/${v.qr_code}`);
+  return new Response(svg, { headers: { "content-type": "image/svg+xml", "cache-control": "private, max-age=3600" } });
 });
 
 // ---- workflows ------------------------------------------------------------

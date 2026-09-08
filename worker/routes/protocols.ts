@@ -101,6 +101,11 @@ protocols.get("/", async (c) => {
     where.push("p.type = ?");
     params.push(type);
   }
+  const vehicleId = url.searchParams.get("vehicle_id");
+  if (vehicleId) {
+    where.push("p.vehicle_id = ?");
+    params.push(vehicleId);
+  }
   if (status) {
     where.push("p.pdf_status = ?");
     params.push(status);

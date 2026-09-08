@@ -121,6 +121,8 @@ interface ProtocolSpec {
   extra?: Record<string, unknown>;
   vehicleUpdates?: Record<string, unknown>;
   extraStatements?: D1PreparedStatement[];
+  // Statements that must exist before the protocol row (e.g. a loan the protocol references).
+  preStatements?: D1PreparedStatement[];
   auditAction: string;
   auditDetails?: Record<string, unknown>;
   sendCopyTo?: string[];
@@ -164,6 +166,7 @@ async function commitProtocol(ctx: WorkflowCtx, spec: ProtocolSpec): Promise<{ i
   };
 
   const statements: D1PreparedStatement[] = [
+    ...(spec.preStatements ?? []),
     stmt(
       env.DB,
       `INSERT INTO protocols (id, number, type, vehicle_id, loan_id, company_id, performed_by, performed_at, odometer_km, operating_hours,
@@ -361,7 +364,7 @@ export function loanCheckout(ctx: WorkflowCtx, vehicleId: string, input: LoanChe
       companyId: input.company_id ?? null,
       party: { name: input.borrower_name, phone: input.borrower_phone, email: input.borrower_email, company: company?.name ?? null },
       loanSnapshot: { checked_out_at: ts, expected_return_at: input.expected_return_at },
-      extraStatements: [loanStatement],
+      preStatements: [loanStatement],
       auditAction: "loan.checked_out",
       auditDetails: { loan_id: loanId, borrower: input.borrower_name, expected_return_at: input.expected_return_at },
       sendCopyTo: copyRecipients(input.borrower_email, input.send_copy_to),

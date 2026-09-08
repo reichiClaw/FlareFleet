@@ -265,11 +265,11 @@ export interface DashboardSummary {
   overdue_loans: number;
   open_damages: number;
   failed_pdfs: number;
-  arrivals: VehicleSummary[];
+  arrivals: (VehicleSummary & { expected_arrival: string | null })[];
   overdue: Loan[];
   due_soon: Loan[];
-  attention: VehicleSummary[];
-  return_due: VehicleSummary[];
+  attention: (VehicleSummary & { open_damage_count: number })[];
+  return_due: (VehicleSummary & { return_due: string | null })[];
   recent: AuditEntry[];
 }
 

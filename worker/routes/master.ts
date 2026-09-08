@@ -9,8 +9,8 @@ import { audit } from "../lib/audit";
 
 const master = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-const shapeCategory = (r: Record<string, unknown>) => ({ ...r, is_active: r.is_active === 1 });
-const shapeCompany = (r: Record<string, unknown>) => ({ ...r, is_active: r.is_active === 1 });
+const shapeCategory = (r: Record<string, unknown>) => ({ ...r, is_active: r.is_active === 1 || r.is_active === true });
+const shapeCompany = (r: Record<string, unknown>) => ({ ...r, is_active: r.is_active === 1 || r.is_active === true });
 
 // ---- categories -----------------------------------------------------------
 master.get("/categories", requireAuth("user"), async (c) => {
