@@ -21,11 +21,11 @@ they are configured.
 | `manufacturer_checkout` | `min_photos` (2), `signature_required` (false) | | |
 | `reservations` | `early_handover_hours` (2), `no_show_grace_hours` (24), `max_horizon_days` (180) | | Reservation service |
 | `maintenance` | `pdf_enabled` (false), `require_photos` (false) | | |
-| `media` | `photo_max_mb` (10), `signature_max_kb` (1024), `max_edge_px` (2048), `staged_ttl_hours` (48), `max_staged_per_user` (30), `thumbnail_px` (320) | | Media routes, cron |
+| `media` | `photo_max_mb` (10), `signature_max_kb` (1024), `max_edge_px` (2048), `staged_ttl_hours` (48), `max_staged_per_user` (30), `max_staged_mb_per_user` (100), `upload_rate_limit_per_hour` (60), `thumbnail_px` (320) | | Media routes, rate limiter, cron |
 | `documents` | `renderer` (`browser`/`pdf-lib`), `auto_generate` (true), `max_photos_in_pdf` (12), `retry_attempts` (5) | | PDF queue |
 | `drafts` | `ttl_hours` (72), `max_form_kb` (64) | | Drafts |
 | `tasks` | `return_due_lookahead_days` (14), `overdue_grace_minutes` (0), `arrival_late_days` (3) | | Dashboard |
-| `import` | `max_rows` (5000), `max_file_mb` (20), `fallback_category_name` ("Sonstiges"), `allow_update_existing` (true) | | Import DO |
+| `import` | `max_rows` (5000), `max_columns` (100), `max_file_mb` (20), `fallback_category_name` ("Sonstiges"), `allow_update_existing` (true) | | Import DO |
 | `notifications` | `email_enabled` (false), `from_address`, `overdue_digest_hour` (7), `recipients_overdue[]`, `recipients_failed_documents[]` | | Notify job |
 | `retention` | `audit_years` (10), `archived_vehicle_years` (10), `exports_days` (7), `sessions_days` (30) | | Cron |
 | `qr` | `public_status_page` (true), `label_format` (`a4_sheet` / `62x29` / `54x25` / `50x30` / `40x30` / `100x50` / `custom`), `label_lines[]` (["internal_number","category","model"]) | | QR print pages, public status endpoint |

@@ -292,7 +292,10 @@ Audit `damage.resolved`, status history `damage_resolved`.
 
 Preconditions: status `available|damaged`, no active loan (`loaned`,
 `maintenance`, `announced`, `checked_in`, archived → rejected with specific
-codes). Validation as check-in. Batch: insert protocol + snapshot, damages
+codes). Validation as check-in, except that the condition outcome is limited
+to `fit` / `new_damage` (a `maintenance` outcome makes no sense for a vehicle
+leaving the pool). The wizard warns when `manufacturer_return_due` is not yet
+reached or open reservations exist. Batch: insert protocol + snapshot, damages
 (`manufacturer_checkout`), media, `transitionVehicle(→ manufacturer_checkout)`,
 document `manufacturer_checkout`, audit
 `workflow.manufacturer_checkout.completed`. Open reservations for this vehicle
@@ -397,9 +400,13 @@ default 24). Vehicle returns to its pre-loan status (`available`). Audit
 
 ## 15. Dashboard and tasks (read models)
 
-`dashboard.summary()` – counts per status, active loans, overdue loans (now >
-`expected_return_at`), returns due within 24 h, open damages, active
-maintenance, announced arrivals, documents failed, recent activity (last 20
+`dashboard.summary()` – counts per status (fleet total excludes
+`manufacturer_checkout` and `archived`), active loans, overdue loans (now >
+`expected_return_at`), `utilization_pct` = loaned / operational fleet, returns
+due within 24 h, open damages, active maintenance, announced arrivals,
+documents failed, `available_by_category`, `checkouts_series` (loans per day,
+last 14 days), upcoming reservations with a `conflict` flag (reservation due
+while the vehicle is loaned to a different party), recent activity (last 20
 audit rows relevant to vehicles).
 
 `dashboard.tasks(limit ≤ 100 per group)` – groups with direct actions:
@@ -411,6 +418,6 @@ audit rows relevant to vehicles).
 | `returns_due_today` | loans `active` with `expected_return_at` within 24 h |
 | `reservation_handovers` | reservations `active` with `start_at` within `early_handover_hours` |
 | `condition_attention` | vehicles `damaged` or `maintenance` |
-| `manufacturer_returns_due` | vehicles with `manufacturer_return_due ≤ today + settings.tasks.return_due_lookahead_days` (default 14) and status ∉ {manufacturer_checkout, archived} |
+| `manufacturer_returns_due` | vehicles with `manufacturer_return_due ≤ today + settings.tasks.return_due_lookahead_days` (default 14) and status ∈ {available, damaged} (eligible for the workflow); loaned/maintenance vehicles with a due date appear in `condition_attention`/`overdue_returns` context instead |
 | `failed_documents` | documents `failed` or `pending` older than 1 h |
 | `stale_drafts` (own) | drafts of the current user expiring within 24 h |
