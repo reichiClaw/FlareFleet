@@ -1,1 +1,308 @@
 # FlareFleet
+
+Fleet and equipment pool management, built **entirely on Cloudflare**: one
+Worker serves the API and the mobile-first React app, with D1 (database),
+R2 (photos, signatures, PDFs), KV (sessions, settings cache), a Durable
+Object (per-vehicle locking), Cron Triggers (housekeeping, overdue digest) and
+Cloudflare Email Service (transactional e-mail). No servers, no Docker, no
+third-party SaaS.
+
+FlareFleet is the successor of
+[`fleet-tracking`](https://github.com/reichiClaw/fleet-tracking) (Django +
+React + PostgreSQL on Docker). It keeps the proven functional model and moves
+it to a single serverless Worker.
+
+## What it does
+
+```text
+Excel import ─▶ announced ─▶ check-in ─▶ available ─▶ loan ─▶ return ─▶ check-out to manufacturer ─▶ archived
+                              (protocol,   (pool,        (protocol,  (protocol,   (protocol, photos)
+                               photos)      QR label)     photos)     photos,
+                                                                      damages)
+```
+
+- **Import** the manufacturer's delivery list from Excel/CSV before the
+  machines arrive; print QR labels.
+- **Check in** vehicles with meter readings, condition, damages and photos.
+- **Loan** vehicles from the pool to subcontractors or drivers with photos
+  and optional signature; **return** them and document new damage.
+- **Maintenance** and **damage** tracking with resolution protocols.
+- **Check out** vehicles to the manufacturer and archive them.
+- **Every step is protocolled**: immutable protocol snapshots, numbered PDF
+  protocols (German/English), status history, append-only audit log, and a
+  per-vehicle timeline. PDFs can be e-mailed to borrowers/suppliers.
+- **QR quick access**: scan a label with the phone camera to open the vehicle;
+  optional public read-only page for anyone who scans a label.
+- **Three roles**: Super Admin (global settings, users), Admin (master data,
+  imports, vehicle edits, status corrections, archive), User (daily workflows).
+- **Mobile-first UI**: bottom navigation, big tap targets, four-step wizards
+  for every workflow, camera capture with client-side image resizing, works
+  in German and English.
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Runtime | Cloudflare Workers + Static Assets | one deployable unit, global, free tier friendly |
+| API | [Hono](https://hono.dev) | tiny, fast, built for Workers |
+| Frontend | React 18 + Vite 6 + Tailwind 4 + TanStack Query | Vite is the officially supported build tool for Workers (`@cloudflare/vite-plugin`): one `vite dev` runs the SPA *and* the Worker with real local D1/R2/KV emulation, and `vite build` produces the deployable Worker + assets. Alternatives (Next.js, Remix/React Router framework mode, Astro) add server rendering that this app does not need |
+| Database | D1 (SQLite) | relational, transactional `batch()`, migrations built in |
+| Files | R2 | photos, signatures, PDFs; served through the Worker with auth |
+| Sessions/cache | KV | cookie sessions, settings cache, rate limiting |
+| Concurrency | Durable Object `VehicleLock` | serialises writes per vehicle |
+| PDF | `pdf-lib` | pure JS, no browser rendering needed |
+| Excel | `fflate` + minimal XLSX reader/writer | small, no Node dependencies |
+| E-mail | Cloudflare Email Service (`send_email` binding) | no SMTP credentials or third-party provider |
+| Validation | Zod, shared between Worker and SPA | one source of truth |
+
+Everything runs on the Workers **Free plan** (D1, R2, KV, Durable Objects
+with SQLite storage, Cron Triggers and Email Service all have free tiers).
+Paid plan only becomes relevant for very high traffic or storage.
+
+## Repository layout
+
+```text
+worker/            Hono API, Durable Object, cron handlers
+  routes/          auth, users, settings, master data, vehicles, protocols, media, imports, dashboard, audit, public
+  services/        vehicles, workflows (check-in/loan/return/…), pdf, imports, media, lock (DO)
+  lib/             db, auth/sessions, crypto, settings, audit, email, i18n, xlsx, qr
+web/               React SPA (pages, components, i18n, api client)
+shared/            types, Zod schemas, status machine and capability rules (used by both sides)
+migrations/        D1 SQL migrations
+docs/              Specification (design target; see note below)
+wrangler.jsonc     Worker configuration and bindings
+```
+
+The `docs/` folder contains the full specification written before
+implementation. The implementation deliberately simplifies a few points to
+stay on the free plan and keep operations trivial: PDFs are rendered with
+`pdf-lib` instead of Browser Rendering, images are resized in the browser
+instead of the Images binding, background work uses `waitUntil` + Cron instead
+of Queues, and drafts/reservations are not implemented.
+
+---
+
+## Deployment manual (Cloudflare)
+
+You need: a Cloudflare account, Node.js 20+, and (for e-mail) a domain whose
+DNS is managed by Cloudflare. Total setup is about 15 minutes.
+
+### 1. Install and log in
+
+```bash
+git clone <this repository> flarefleet
+cd flarefleet
+npm install
+npx wrangler login          # opens the browser, authorises Wrangler
+npx wrangler whoami         # shows your account id
+```
+
+### 2. Create the Cloudflare resources
+
+```bash
+# D1 database
+npx wrangler d1 create flarefleet-db
+# -> prints "database_id": "xxxxxxxx-xxxx-...". Copy it.
+
+# KV namespace (sessions, settings cache)
+npx wrangler kv namespace create KV
+# -> prints "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx". Copy it.
+
+# R2 bucket (photos, signatures, PDFs)
+npx wrangler r2 bucket create flarefleet-media
+```
+
+If `r2 bucket create` says R2 is not enabled, open the Cloudflare dashboard
+once: **R2 Object Storage → Get started** (the free tier needs no payment
+method to activate; it just has to be switched on once).
+
+### 3. Configure `wrangler.jsonc`
+
+Open `wrangler.jsonc` and replace the placeholders:
+
+```jsonc
+"d1_databases": [
+  { "binding": "DB", "database_name": "flarefleet-db",
+    "database_id": "PASTE_D1_DATABASE_ID", "migrations_dir": "./migrations" }
+],
+"kv_namespaces": [
+  { "binding": "KV", "id": "PASTE_KV_NAMESPACE_ID" }
+],
+```
+
+and set the variables:
+
+```jsonc
+"vars": {
+  "APP_NAME": "FlareFleet",
+  "PUBLIC_BASE_URL": "https://flarefleet.<your-subdomain>.workers.dev",  // or your custom domain
+  "EMAIL_FROM": "fleet@yourdomain.com",   // must be on a domain onboarded in Email Service (step 5)
+  "EMAIL_ENABLED": "true"                 // "false" if you skip e-mail for now
+}
+```
+
+Nothing else needs secrets: there is no SMTP password, no API key. The first
+super admin is created through the app on first start.
+
+### 4. Create the database schema
+
+```bash
+npm run db:migrate
+```
+
+This applies `migrations/*.sql` to the remote D1 database. Run it again after
+every update that ships new migration files (it only applies new ones).
+
+### 5. Enable e-mail (optional but recommended)
+
+FlareFleet sends invitations, password resets, protocol copies and the daily
+overdue digest through Cloudflare Email Service. Setup is done in the
+dashboard, no code or secrets required:
+
+1. Cloudflare dashboard → **Compute → Email Service → Email Sending**.
+2. **Onboard Domain** → pick the domain you want to send from (it must use
+   Cloudflare DNS). Cloudflare adds the required MX/SPF/DKIM/DMARC records
+   to a `cf-bounce` subdomain automatically. Select **Done**.
+3. Make sure `EMAIL_FROM` in `wrangler.jsonc` uses that domain
+   (e.g. `fleet@yourdomain.com`).
+
+The `send_email` binding is already declared in `wrangler.jsonc`. If you skip
+this step, set `EMAIL_ENABLED` to `"false"`; the app then shows temporary
+passwords on screen instead of mailing them, and everything else works
+normally. You can verify delivery later from **Settings → Send test e-mail**
+inside the app.
+
+### 6. Build and deploy
+
+```bash
+npm run deploy
+```
+
+This runs `vite build` (SPA + Worker) and `wrangler deploy`. The first deploy
+also creates the `VehicleLock` Durable Object class and registers the two
+cron triggers. Wrangler prints the URL, typically
+`https://flarefleet.<your-subdomain>.workers.dev`.
+
+If `PUBLIC_BASE_URL` was still a placeholder, set it to the printed URL and
+deploy again (it is used for links in QR labels and e-mails).
+
+### 7. First start: create the super admin
+
+Open the URL. Because no user exists yet, the app shows the **Setup** screen:
+enter organisation name, your name, e-mail and a password (10+ characters).
+This creates the first **Super Admin** and logs you in. The setup screen is
+disabled permanently afterwards.
+
+Then, as Super Admin:
+
+1. **Settings**: language, minimum photos per workflow, signature
+   requirements, default loan duration, public QR page on/off, e-mail
+   recipients for the overdue digest, PDF footer.
+2. **Categories**: create vehicle categories and their meter mode
+   (odometer / operating hours / both / none).
+3. **Partners**: suppliers (manufacturers) and subcontractors/drivers.
+4. **Users**: invite admins and users. With e-mail enabled they receive an
+   invitation with a temporary password; otherwise the password is shown to
+   you once.
+5. **Import**: download the Excel template, fill it with the delivery list,
+   upload, review, commit. The vehicles appear as *announced* and can be
+   checked in when they arrive.
+
+### 8. Custom domain (optional)
+
+In the dashboard: **Workers & Pages → flarefleet → Settings → Domains &
+Routes → Add → Custom domain** and enter e.g. `fleet.yourdomain.com` (the
+zone must be on Cloudflare). Then set `PUBLIC_BASE_URL` to
+`https://fleet.yourdomain.com` and run `npm run deploy` again.
+
+### 9. Updating
+
+```bash
+git pull
+npm install
+npm run db:migrate      # applies new migrations, if any
+npm run deploy
+```
+
+Deployments are atomic; users keep their sessions.
+
+### Operations cheat sheet
+
+| Task | How |
+|---|---|
+| Live logs | `npm run tail` (or dashboard → Workers → flarefleet → Logs; observability is enabled) |
+| Database console | `npx wrangler d1 execute flarefleet-db --remote --command "SELECT count(*) FROM vehicles"` |
+| Export database | `npx wrangler d1 export flarefleet-db --remote --output backup.sql` |
+| Point-in-time restore | D1 Time Travel: `npx wrangler d1 time-travel restore flarefleet-db --timestamp=<ISO date>` (30 days on the free plan) |
+| Files | dashboard → R2 → `flarefleet-media` (keys: `photo/`, `signature/`, `pdf/`, `import/`, one folder per day) |
+| Scheduled jobs | hourly: retry pending/failed PDFs, purge staged uploads that were never attached; daily 06:00 UTC: overdue-loan digest. Sessions expire via KV TTL |
+| Rotate all sessions | delete the keys with prefix `session:` in the KV namespace (dashboard → KV) |
+| Reset a locked-out super admin | `npx wrangler d1 execute flarefleet-db --remote --command "UPDATE users SET is_active=1, failed_logins=0, locked_until=NULL WHERE email='you@example.com'"` then use *Forgot password* (needs e-mail) or have another super admin reset it |
+
+### Multiple environments (optional)
+
+To run a staging copy, add an environment block to `wrangler.jsonc` with its
+own D1/KV/R2 ids and `PUBLIC_BASE_URL`, then use `wrangler deploy --env
+staging` and `wrangler d1 migrations apply flarefleet-db-staging --remote --env staging --config wrangler.jsonc`.
+
+---
+
+## Local development
+
+```bash
+npm install
+npm run db:migrate:local      # creates the local SQLite database
+npm run dev                   # http://localhost:5173
+```
+
+`npm run dev` starts Vite with the Cloudflare plugin: the React app has hot
+reload and the Worker runs in the real `workerd` runtime with local D1, R2,
+KV and Durable Object emulation. E-mails are not sent locally; Wrangler prints
+them to the console. Open http://localhost:5173, complete the setup screen,
+and start clicking. Optional local overrides go into `.dev.vars` (see
+`.dev.vars.example`).
+
+Useful scripts:
+
+| Script | Purpose |
+|---|---|
+| `npm run typecheck` | TypeScript for SPA and Worker |
+| `npm run build` | production build into `dist/` |
+| `npm run preview` | serve the production build locally |
+| `npm run cf-typegen` | regenerate Worker binding types from `wrangler.jsonc` |
+
+## Using the app (quick tour)
+
+- **Dashboard**: counts per status, expected arrivals, overdue loans, vehicles
+  needing attention, recent activity.
+- **Vehicles**: search and filter; open a vehicle for its overview, history
+  timeline, damages, photos, loans, QR label and the actions that are valid in
+  its current status.
+- **Workflows** (check-in, loan, return, maintenance, check-out, correction)
+  are four-step wizards: details → photos → condition/damages → confirm. Each
+  produces a numbered protocol with a PDF.
+- **Scan**: point the phone camera at a QR label to jump to the vehicle.
+- **Documents**: all protocols with PDF download; failed PDFs can be
+  regenerated.
+- **Import**: Excel/CSV upload with validation preview before commit.
+- **Audit**: filterable, exportable log of everything that happened.
+
+## Specification
+
+The design documents in [`docs/`](docs/) describe the target system in detail:
+
+| Document | Content |
+|---|---|
+| [01 Vision and scope](docs/01-vision-and-scope.md) | Goals, feature inventory, simplifications vs. the old app |
+| [02 Architecture](docs/02-architecture.md) | Cloudflare building blocks, request flow, concurrency model, auth |
+| [03 Roles and permissions](docs/03-roles-and-permissions.md) | Super admin / admin / user, permission matrix, capability flags |
+| [04 Data model](docs/04-data-model.md) | D1 DDL, snapshot shapes, R2/KV layout |
+| [05 Workflows](docs/05-workflows.md) | Status machine and function-level rules for every workflow |
+| [06 API](docs/06-api.md) | REST endpoints |
+| [07 Frontend](docs/07-frontend.md) | Routes, wizards, components |
+| [08 Excel import](docs/08-excel-import.md) | Columns, validation, commit |
+| [09 Media and PDF](docs/09-media-and-pdf.md) | Photos, signatures, PDF protocols, document register |
+| [10 Protocol and audit](docs/10-protocol-and-audit.md) | Audit log, vehicle timeline, retention |
+| [11 Settings](docs/11-settings.md) | Super-admin global settings |
+| [12 Implementation plan](docs/12-implementation-plan.md) | Milestones, work packages, risks |
+| [13 Testing and operations](docs/13-testing-and-operations.md) | Tests, CI/CD, observability, backups |

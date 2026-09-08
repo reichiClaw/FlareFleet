@@ -1,0 +1,7 @@
+# Optional local overrides for `npm run dev`. Copy to `.dev.vars` (never committed).
+# FlareFleet needs no secrets: the first super admin is created through the
+# in-app setup screen (/setup) on first start.
+#
+# PUBLIC_BASE_URL=http://localhost:5173
+# EMAIL_FROM=fleet@example.com
+# EMAIL_ENABLED=false

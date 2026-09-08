@@ -1,0 +1,57 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flarefleet",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The React SPA is served as static assets; everything under /api and the
+  // public QR endpoint runs in the Worker first.
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "vars": {
+    "APP_NAME": "FlareFleet",
+    // Public URL of this deployment (used in QR labels and e-mails). Override per environment.
+    "PUBLIC_BASE_URL": "http://localhost:5173",
+    // Sender address for e-mails. Must belong to a domain onboarded in Cloudflare Email Service.
+    "EMAIL_FROM": "fleet@example.com",
+    // Set to "false" to disable e-mail sending entirely.
+    "EMAIL_ENABLED": "true"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flarefleet-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "flarefleet-media" }
+  ],
+  "kv_namespaces": [
+    { "binding": "KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "VEHICLE_LOCK", "class_name": "VehicleLock" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["VehicleLock"] }
+  ],
+  "send_email": [
+    { "name": "EMAIL" }
+  ],
+  "triggers": {
+    // Every hour: purge never-attached staged uploads, retry pending/failed PDFs.
+    // Daily 06:00 UTC: overdue-return e-mail digest.
+    "crons": ["0 * * * *", "0 6 * * *"]
+  }
+}
