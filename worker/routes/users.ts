@@ -4,7 +4,7 @@ import { UserCreateSchema, UserUpdateSchema } from "@shared/schemas";
 import type { AppVariables, Env } from "../env";
 import { parseBody } from "../lib/validate";
 import { ApiError, conflict, notFound } from "../lib/errors";
-import { generatePassword, hashPassword, randomToken } from "../lib/crypto";
+import { generatePassword, hashPassword, pbkdf2Iterations, randomToken } from "../lib/crypto";
 import { requireAuth } from "../lib/auth";
 import { all, now, one, stmt, uid } from "../lib/db";
 import { audit } from "../lib/audit";
@@ -43,7 +43,7 @@ users.post("/", async (c) => {
     input.email,
     input.name,
     input.role,
-    tempPassword ? await hashPassword(tempPassword) : null,
+    tempPassword ? await hashPassword(tempPassword, pbkdf2Iterations(c.env)) : null,
     input.language,
     ts,
     ts,
@@ -112,7 +112,7 @@ users.post("/:id/reset-password", async (c) => {
   }
   if (!emailed) {
     tempPassword = generatePassword();
-    await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 1, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?", await hashPassword(tempPassword), now(), id).run();
+    await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 1, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?", await hashPassword(tempPassword, pbkdf2Iterations(c.env)), now(), id).run();
   }
   // Invalidate all sessions of that user is not possible with KV listing cheaply; sessions expire in 14 days.
   await audit(c.env.DB, { actor_id: actor.id, actor_label: actor.name, action: "user.password_reset", entity_type: "user", entity_id: id, details: { emailed }, ip: c.get("ip") });

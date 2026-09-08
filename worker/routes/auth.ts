@@ -5,7 +5,7 @@ import { ChangePasswordSchema, ForgotPasswordSchema, LoginSchema, ProfileUpdateS
 import type { AppVariables, Env, SessionUser } from "../env";
 import { parseBody } from "../lib/validate";
 import { ApiError, badRequest, notFound } from "../lib/errors";
-import { hashPassword, randomToken, verifyPassword } from "../lib/crypto";
+import { hashPassword, needsRehash, pbkdf2Iterations, randomToken, verifyPassword } from "../lib/crypto";
 import { clearSessionCookie, createSession, destroySession, rateLimit, requireAuth, setSessionCookie } from "../lib/auth";
 import { now, one, stmt, uid } from "../lib/db";
 import { audit } from "../lib/audit";
@@ -61,7 +61,7 @@ auth.post("/setup", async (c) => {
       id,
       input.email,
       input.name,
-      await hashPassword(input.password),
+      await hashPassword(input.password, pbkdf2Iterations(c.env)),
       input.language,
       ts,
       ts,
@@ -102,6 +102,10 @@ auth.post("/login", async (c) => {
     throw new ApiError(401, "invalid_credentials");
   }
   if (!u.is_active) throw new ApiError(403, "account_inactive");
+  const iterations = pbkdf2Iterations(c.env);
+  if (u.password_hash && needsRehash(u.password_hash, iterations)) {
+    await stmt(c.env.DB, "UPDATE users SET password_hash = ? WHERE id = ?", await hashPassword(input.password, iterations), u.id).run();
+  }
   await stmt(c.env.DB, "UPDATE users SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?", ts, u.id).run();
   const session = await createSession(c.env, u.id, ip);
   setSessionCookie(c, session.id);
@@ -146,7 +150,7 @@ auth.post("/change-password", requireAuth("user", { allowPasswordChange: true })
       throw badRequest("password_wrong", { current_password: "wrong" });
     }
   }
-  await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?", await hashPassword(input.new_password), now(), user.id).run();
+  await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?", await hashPassword(input.new_password, pbkdf2Iterations(c.env)), now(), user.id).run();
   await audit(c.env.DB, { actor_id: user.id, actor_label: user.name, action: "auth.password_changed", entity_type: "user", entity_id: user.id, ip: c.get("ip") });
   return c.json(await meResponse(c.env, { ...user, must_change_password: false }, c.get("csrf")));
 });
@@ -174,7 +178,7 @@ auth.post("/reset-password", async (c) => {
   if (!userId) throw badRequest("invalid_token");
   const u = await one<UserRow>(c.env.DB, "SELECT * FROM users WHERE id = ? AND is_active = 1", userId);
   if (!u) throw badRequest("invalid_token");
-  await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 0, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?", await hashPassword(input.new_password), now(), u.id).run();
+  await stmt(c.env.DB, "UPDATE users SET password_hash = ?, must_change_password = 0, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?", await hashPassword(input.new_password, pbkdf2Iterations(c.env)), now(), u.id).run();
   await c.env.KV.delete(`pwreset:${input.token}`);
   await audit(c.env.DB, { actor_id: u.id, actor_label: u.name, action: "auth.password_reset", entity_type: "user", entity_id: u.id, ip: c.get("ip") });
   const session = await createSession(c.env, u.id, c.get("ip"));
