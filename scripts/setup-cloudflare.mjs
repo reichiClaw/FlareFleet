@@ -245,7 +245,7 @@ if (emailEnabled) {
 
 // 6. Migrations ------------------------------------------------------------
 step(6, "Applying D1 migrations (remote)");
-wrangler(["d1", "migrations", "apply", DB_NAME, "--remote", "--config", "wrangler.jsonc"], { inherit: true });
+wrangler(["d1", "migrations", "apply", "DB", "--remote", "--config", "wrangler.jsonc"], { inherit: true });
 ok("Schema is up to date");
 
 // 7. Deploy ----------------------------------------------------------------

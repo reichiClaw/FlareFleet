@@ -1,5 +1,7 @@
 # FlareFleet
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/reichiClaw/FlareFleet)
+
 Fleet and equipment pool management, built **entirely on Cloudflare**: one
 Worker serves the API and the mobile-first React app, with D1 (database),
 R2 (photos, signatures, PDFs), KV (sessions, settings cache), a Durable
@@ -85,10 +87,46 @@ of Queues, and drafts/reservations are not implemented.
 
 ## Deployment manual (Cloudflare)
 
+There are three ways to install, from easiest to most manual. All three end
+at the same place: open the Worker URL and complete the setup screen.
+
+### Option A: Deploy to Cloudflare button (no local tools)
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/reichiClaw/FlareFleet)
+
+Click the button, sign in to Cloudflare and connect your GitHub or GitLab
+account. Cloudflare then:
+
+1. Copies this repository into a new repository on your account (you own the
+   code and can keep developing).
+2. Shows one configuration page: Worker name, names for the D1 database, KV
+   namespace and R2 bucket, and the variables `EMAIL_FROM` / `EMAIL_ENABLED`
+   (`PUBLIC_BASE_URL` can stay empty). Each field carries a short
+   description. Set `EMAIL_ENABLED` to `false` if you have not onboarded a
+   sending domain yet; you can switch it on later.
+3. Provisions the D1 database, KV namespace, R2 bucket and the `VehicleLock`
+   Durable Object, writes their ids into `wrangler.jsonc` in your new
+   repository, runs the D1 migrations (part of the `deploy` script), builds
+   and deploys.
+4. Sets up Workers Builds: every push to your new repository's main branch
+   redeploys automatically, and pull requests get preview URLs.
+
+When the build finishes, open the Worker URL (`https://<worker>.<your
+subdomain>.workers.dev`). The setup screen creates the first super admin and
+records that URL for QR labels and e-mail links; nothing else to configure.
+
+Requirements: the source repository must be public (it is), and R2 must be
+enabled once on your account (dashboard → R2 Object Storage → Get started,
+free). If the first build fails with an R2 error, enable R2 and hit *Retry
+build* in Workers & Pages → your Worker → Deployments.
+
+To pull later FlareFleet updates into your copy, add this repository as a
+git remote and merge; Workers Builds deploys on push.
+
+### Option B: Installer script
+
 You need: a Cloudflare account, Node.js 20+, and (for e-mail) a domain whose
 DNS is managed by Cloudflare.
-
-### Quick install (script)
 
 ```bash
 git clone <this repository> flarefleet
@@ -116,7 +154,10 @@ enable it once in the dashboard (**R2 Object Storage → Get started**, free),
 then run it again. E-mail additionally needs the sender domain onboarded
 (step 5 below); the script reminds you.
 
-The manual steps below do the same thing by hand.
+### Option C: Manual steps
+
+The same thing by hand, useful to understand what the button and the script
+do.
 
 ### 1. Install and log in
 
@@ -166,7 +207,7 @@ and set the variables:
 ```jsonc
 "vars": {
   "APP_NAME": "FlareFleet",
-  "PUBLIC_BASE_URL": "https://flarefleet.<your-subdomain>.workers.dev",  // or your custom domain
+  "PUBLIC_BASE_URL": "",                  // empty = recorded automatically at first-run setup; set for a custom domain
   "EMAIL_FROM": "fleet@yourdomain.com",   // must be on a domain onboarded in Email Service (step 5)
   "EMAIL_ENABLED": "true"                 // "false" if you skip e-mail for now
 }
@@ -209,13 +250,15 @@ inside the app.
 npm run deploy
 ```
 
-This runs `vite build` (SPA + Worker) and `wrangler deploy`. The first deploy
-also creates the `VehicleLock` Durable Object class and registers the two
-cron triggers. Wrangler prints the URL, typically
-`https://flarefleet.<your-subdomain>.workers.dev`.
+This applies pending migrations, runs `vite build` (SPA + Worker) and
+`wrangler deploy`. The first deploy also creates the `VehicleLock` Durable
+Object class and registers the two cron triggers. Wrangler prints the URL,
+typically `https://flarefleet.<your-subdomain>.workers.dev`.
 
-If `PUBLIC_BASE_URL` was still a placeholder, set it to the printed URL and
-deploy again (it is used for links in QR labels and e-mails).
+The URL used in QR labels and e-mail links is recorded automatically when you
+complete the setup screen (step 7) and can be changed any time under
+**Settings → Public URL**; `PUBLIC_BASE_URL` in `wrangler.jsonc` only needs a
+value if you want to pin it.
 
 ### 7. First start: create the super admin
 
@@ -243,8 +286,10 @@ Then, as Super Admin:
 
 In the dashboard: **Workers & Pages → flarefleet → Settings → Domains &
 Routes → Add → Custom domain** and enter e.g. `fleet.yourdomain.com` (the
-zone must be on Cloudflare). Then set `PUBLIC_BASE_URL` to
-`https://fleet.yourdomain.com` and run `npm run deploy` again.
+zone must be on Cloudflare). Then change the public URL to
+`https://fleet.yourdomain.com` either in the app (**Settings → Public URL**,
+takes effect immediately) or via `PUBLIC_BASE_URL` in `wrangler.jsonc`
+followed by `npm run deploy`.
 
 ### 9. Updating
 

@@ -22,6 +22,12 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const CACHE_KEY = "settings:v1";
 
+/** True when PUBLIC_BASE_URL is an explicit public address (not empty, not a local dev URL). */
+export function isUsableBaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return !/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\/?$/i.test(url.trim());
+}
+
 export async function loadSettings(env: Env): Promise<Settings> {
   const cached = await env.KV.get<Settings>(CACHE_KEY, "json");
   if (cached) return { ...DEFAULT_SETTINGS, ...cached };

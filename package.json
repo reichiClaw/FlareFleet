@@ -10,10 +10,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
     "setup:cloudflare": "node scripts/setup-cloudflare.mjs",
-    "db:migrate:local": "wrangler d1 migrations apply flarefleet-db --local --config wrangler.jsonc",
-    "db:migrate": "wrangler d1 migrations apply flarefleet-db --remote --config wrangler.jsonc",
-    "deploy": "npm run build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.jsonc",
+    "db:migrate": "wrangler d1 migrations apply DB --remote --config wrangler.jsonc",
+    "deploy": "npm run db:migrate && npm run build && wrangler deploy",
     "tail": "wrangler tail"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": { "description": "D1 database holding vehicles, loans, protocols, users and the audit log." },
+      "KV": { "description": "KV namespace for login sessions and the settings cache." },
+      "MEDIA": { "description": "R2 bucket for photos, signatures and generated PDF protocols." },
+      "PUBLIC_BASE_URL": { "description": "Leave empty: the app records its own URL on the first-run setup screen. Set it only when you attach a custom domain (e.g. `https://fleet.example.com`)." },
+      "EMAIL_FROM": { "description": "Sender address for invitations, password resets and protocol copies. Its domain must be onboarded under **Compute → Email Service → Email Sending**." },
+      "EMAIL_ENABLED": { "description": "`true` to send e-mail through Cloudflare Email Service, `false` to run without e-mail (temporary passwords are then shown on screen)." }
+    }
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",

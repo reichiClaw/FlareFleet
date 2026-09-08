@@ -9,7 +9,7 @@ import { hashPassword, randomToken, verifyPassword } from "../lib/crypto";
 import { clearSessionCookie, createSession, destroySession, rateLimit, requireAuth, setSessionCookie } from "../lib/auth";
 import { now, one, stmt, uid } from "../lib/db";
 import { audit } from "../lib/audit";
-import { loadSettings, publicSettings } from "../lib/settings";
+import { isUsableBaseUrl, loadSettings, publicSettings } from "../lib/settings";
 import { emailAvailable, sendEmail } from "../lib/email";
 import { t } from "../lib/i18n";
 
@@ -70,6 +70,11 @@ auth.post("/setup", async (c) => {
       ? [stmt(c.env.DB, "INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('org_name', ?, ?, ?)", JSON.stringify(input.org_name), id, ts)]
       : []),
     stmt(c.env.DB, "INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('default_language', ?, ?, ?)", JSON.stringify(input.language), id, ts),
+    // Remember the URL the app was reached at so QR labels and e-mail links work
+    // without editing PUBLIC_BASE_URL (Deploy-to-Cloudflare button flow).
+    ...(isUsableBaseUrl(c.env.PUBLIC_BASE_URL)
+      ? []
+      : [stmt(c.env.DB, "INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('public_base_url', ?, ?, ?)", JSON.stringify(new URL(c.req.url).origin), id, ts)]),
   ]);
   await c.env.KV.delete("settings:v1");
   await audit(c.env.DB, { actor_id: id, actor_label: input.name, action: "system.setup", entity_type: "user", entity_id: id, ip: c.get("ip") });
