@@ -50,7 +50,7 @@
     { "name": "EMAIL" }
   ],
   "triggers": {
-    // Every hour: expire staged uploads, retry pending PDFs, purge old sessions.
+    // Every hour: purge never-attached staged uploads, retry pending/failed PDFs.
     // Daily 06:00 UTC: overdue-return e-mail digest.
     "crons": ["0 * * * *", "0 6 * * *"]
   }

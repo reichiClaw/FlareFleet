@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
-    "db:migrate:local": "wrangler d1 migrations apply flarefleet-db --local",
-    "db:migrate": "wrangler d1 migrations apply flarefleet-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply flarefleet-db --local --config wrangler.jsonc",
+    "db:migrate": "wrangler d1 migrations apply flarefleet-db --remote --config wrangler.jsonc",
     "deploy": "npm run build && wrangler deploy",
     "tail": "wrangler tail"
   },

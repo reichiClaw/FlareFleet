@@ -43,7 +43,7 @@ export function App() {
   const lang = me?.language ?? detectLanguage();
   return (
     <I18nProvider lang={lang}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/setup" element={<SetupPage />} />
