@@ -66,14 +66,16 @@ export function VehiclesPage() {
           ))}
         </div>
         <div className="flex gap-2">
-          <Select value={category} onChange={(e) => set("category_id", e.target.value)} className="flex-1">
-            <option value="">{t("vehicles.filter_category")}: {t("common.all")}</option>
-            {categories.data?.results.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
+          <div className="min-w-0 flex-1">
+            <Select value={category} onChange={(e) => set("category_id", e.target.value)}>
+              <option value="">{t("vehicles.filter_category")}: {t("common.all")}</option>
+              {categories.data?.results.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
           <label className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700">
             <input type="checkbox" checked={archived} onChange={(e) => set("include_archived", e.target.checked ? "1" : "")} />
             {t("vehicles.include_archived")}

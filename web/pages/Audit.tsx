@@ -42,9 +42,14 @@ export function AuditPage() {
           </a>
         }
       />
+      {/* The controls carry w-full, so the row sizes them through wrappers. */}
       <div className="flex gap-2">
-        <Input type="search" placeholder={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1" />
-        <Input placeholder={t("audit.action")} value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="w-40" list="audit-actions" />
+        <div className="min-w-0 flex-1">
+          <Input type="search" placeholder={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="w-40 shrink-0">
+          <Input placeholder={t("audit.action")} value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} list="audit-actions" />
+        </div>
         <datalist id="audit-actions">
           {["auth.", "vehicle.", "loan.", "damage.", "maintenance.", "import.", "user.", "settings.", "protocol.", "company.", "driver.", "category."].map((a) => (
             <option key={a} value={a} />

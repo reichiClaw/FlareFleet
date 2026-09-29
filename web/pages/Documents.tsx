@@ -70,16 +70,21 @@ export function DocumentsPage() {
   return (
     <div>
       <PageHeader title={t("docs.title")} subtitle={query.data ? t("common.results", { count: query.data.count }) : undefined} />
+      {/* The controls carry w-full, so the row sizes them through wrappers. */}
       <div className="flex gap-2">
-        <Input type="search" placeholder={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1" />
-        <Select value={type} onChange={(e) => set("type", e.target.value)} className="w-44">
-          <option value="">{t("docs.filter_type")}: {t("common.all")}</option>
-          {TYPES.map((tp) => (
-            <option key={tp} value={tp}>
-              {t(`protocol.${tp}`)}
-            </option>
-          ))}
-        </Select>
+        <div className="min-w-0 flex-1">
+          <Input type="search" placeholder={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="w-44 shrink-0">
+          <Select value={type} onChange={(e) => set("type", e.target.value)}>
+            <option value="">{t("docs.filter_type")}: {t("common.all")}</option>
+            {TYPES.map((tp) => (
+              <option key={tp} value={tp}>
+                {t(`protocol.${tp}`)}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
       <div className="mt-4">
         {query.isLoading ? (
