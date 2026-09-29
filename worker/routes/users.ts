@@ -35,15 +35,13 @@ users.post("/", async (c) => {
   const ts = now();
   const settings = await loadSettings(c.env);
   const canEmail = input.send_invite && emailAvailable(c.env, settings);
-  const tempPassword = canEmail ? null : generatePassword();
   await stmt(
     c.env.DB,
-    "INSERT INTO users (id, email, name, role, password_hash, must_change_password, language, is_active, created_at, updated_at) VALUES (?,?,?,?,?,1,?,1,?,?)",
+    "INSERT INTO users (id, email, name, role, password_hash, must_change_password, language, is_active, created_at, updated_at) VALUES (?,?,?,?,NULL,1,?,1,?,?)",
     id,
     input.email,
     input.name,
     input.role,
-    tempPassword ? await hashPassword(tempPassword, pbkdf2Iterations(c.env)) : null,
     input.language,
     ts,
     ts,
@@ -60,10 +58,17 @@ users.post("/", async (c) => {
       t(input.language, "email.invite.body", { name: input.name, org: settings.org_name, link, email: input.email }),
     );
   }
+  // Without a delivered invitation the account would have no way in at all, so
+  // fall back to a temporary password the admin can pass on.
+  let tempPassword: string | null = null;
+  if (!invited) {
+    tempPassword = generatePassword();
+    await stmt(c.env.DB, "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", await hashPassword(tempPassword, pbkdf2Iterations(c.env)), now(), id).run();
+  }
   await audit(c.env.DB, { actor_id: actor.id, actor_label: actor.name, action: "user.created", entity_type: "user", entity_id: id, details: { email: input.email, role: input.role, invited }, ip: c.get("ip") });
   const row = await one<Record<string, unknown>>(c.env.DB, `SELECT ${COLS} FROM users WHERE id = ?`, id);
   // The temporary password is shown once to the admin when no e-mail could be sent.
-  return c.json({ ...shape(row!), temporary_password: invited ? null : tempPassword, invited }, 201);
+  return c.json({ ...shape(row!), temporary_password: tempPassword, invited }, 201);
 });
 
 users.patch("/:id", async (c) => {
