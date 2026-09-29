@@ -151,12 +151,18 @@ users.delete("/:id", async (c) => {
     if ((others?.c ?? 0) === 0) throw conflict("last_super_admin");
   }
 
-  const refs = await one<{ protocols: number; loans: number; damages: number; imports: number }>(
+  // Every table that names the user. The audit log is left out on purpose: it
+  // stores the actor's name as text, so it stays readable without the account.
+  const refs = await one<{ protocols: number; loans: number; damages: number; imports: number; vehicles: number; media: number }>(
     c.env.DB,
     `SELECT (SELECT COUNT(*) FROM protocols WHERE performed_by = ?) AS protocols,
             (SELECT COUNT(*) FROM loans WHERE created_by = ? OR returned_by = ?) AS loans,
             (SELECT COUNT(*) FROM damages WHERE reported_by = ? OR resolved_by = ?) AS damages,
-            (SELECT COUNT(*) FROM import_jobs WHERE created_by = ?) AS imports`,
+            (SELECT COUNT(*) FROM import_jobs WHERE created_by = ?) AS imports,
+            (SELECT COUNT(*) FROM vehicles WHERE created_by = ?) AS vehicles,
+            (SELECT COUNT(*) FROM media WHERE uploaded_by = ? AND attached_at IS NOT NULL) AS media`,
+    id,
+    id,
     id,
     id,
     id,
@@ -164,7 +170,8 @@ users.delete("/:id", async (c) => {
     id,
     id,
   );
-  const history = (refs?.protocols ?? 0) + (refs?.loans ?? 0) + (refs?.damages ?? 0) + (refs?.imports ?? 0);
+  const history =
+    (refs?.protocols ?? 0) + (refs?.loans ?? 0) + (refs?.damages ?? 0) + (refs?.imports ?? 0) + (refs?.vehicles ?? 0) + (refs?.media ?? 0);
   const ts = now();
   if (history === 0) {
     await stmt(c.env.DB, "DELETE FROM users WHERE id = ?", id).run();
