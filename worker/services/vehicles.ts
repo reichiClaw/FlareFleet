@@ -1,4 +1,5 @@
 import type { Loan, MeterMode, Role, Vehicle, VehicleStatus, VehicleSummary } from "@shared/types";
+import { VEHICLE_STATUSES } from "@shared/types";
 import { formatInternalNumber, randomQrCode, vehicleCapabilities } from "@shared/domain";
 import type { VehicleCreateInput, VehicleUpdateInput } from "@shared/schemas";
 import type { Env, SessionUser } from "../env";
@@ -35,15 +36,7 @@ export interface VehicleRow {
   open_damage_count: number;
 }
 
-const VEHICLE_STATUSES = new Set<string>([
-  "announced",
-  "available",
-  "loaned",
-  "damaged",
-  "maintenance",
-  "checked_out",
-  "archived",
-]);
+const KNOWN_STATUSES = new Set<string>(VEHICLE_STATUSES);
 
 export const VEHICLE_SELECT = `
   SELECT v.*, c.name AS category_name, c.meter_mode, s.name AS supplier_name,
@@ -166,7 +159,7 @@ export async function listVehicles(env: Env, url: URL) {
     const like = `%${q}%`;
     params.push(like, like, like, like, like, like, like);
   }
-  const statusList = status ? status.split(",").filter((s) => VEHICLE_STATUSES.has(s)) : [];
+  const statusList = status ? status.split(",").filter((s) => KNOWN_STATUSES.has(s)) : [];
   if (statusList.length) {
     where.push(`v.status IN (${statusList.map(() => "?").join(",")})`);
     params.push(...statusList);
