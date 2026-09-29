@@ -91,10 +91,16 @@ async function loadEvidence(
 }
 
 async function loadDamagePhotos(ctx: WorkflowCtx, damages: DamageLine[]): Promise<Map<number, MediaRow[]>> {
+  // One lookup for every damage: 20 damages would otherwise be 20 queries.
+  const rows = await loadStaged(
+    ctx.env,
+    damages.flatMap((d) => d.photo_ids),
+    "photo",
+    ctx.user.id,
+  );
+  const byId = new Map(rows.map((r) => [r.id, r]));
   const map = new Map<number, MediaRow[]>();
-  for (let i = 0; i < damages.length; i++) {
-    map.set(i, await loadStaged(ctx.env, damages[i].photo_ids, "photo", ctx.user.id));
-  }
+  damages.forEach((d, i) => map.set(i, d.photo_ids.map((id) => byId.get(id)!)));
   return map;
 }
 
