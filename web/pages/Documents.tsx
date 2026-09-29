@@ -4,6 +4,7 @@ import type { Paginated, Protocol, ProtocolType } from "@shared/types";
 import { api, qs } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
+import { useDebouncedParam } from "../lib/hooks";
 import { fmtDateTime, fmtNum } from "../lib/format";
 import { Badge, Button, Card, EmptyState, ErrorBox, Input, KeyValue, Loading, PageHeader, Pagination, Select, StatusBadge, cx, errorMessage, useToast } from "../components/ui";
 
@@ -51,6 +52,7 @@ export function DocumentsPage() {
   const type = params.get("type") ?? "";
   const pdfStatus = params.get("pdf_status") ?? "";
   const q = params.get("q") ?? "";
+  const [search, setSearch] = useDebouncedParam("q");
   const page = Number(params.get("page") ?? 1);
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
@@ -69,7 +71,7 @@ export function DocumentsPage() {
     <div>
       <PageHeader title={t("docs.title")} subtitle={query.data ? t("common.results", { count: query.data.count }) : undefined} />
       <div className="flex gap-2">
-        <Input type="search" placeholder={t("common.search")} defaultValue={q} onChange={(e) => set("q", e.target.value)} className="flex-1" />
+        <Input type="search" placeholder={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1" />
         <Select value={type} onChange={(e) => set("type", e.target.value)} className="w-44">
           <option value="">{t("docs.filter_type")}: {t("common.all")}</option>
           {TYPES.map((tp) => (

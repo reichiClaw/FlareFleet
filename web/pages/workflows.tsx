@@ -625,6 +625,7 @@ export function CheckOutPage() {
         {
           key: "condition",
           title: t("wf.step_condition"),
+          validate: () => (condition === "damaged" && damagesPayload(damages).length === 0 ? t("wf.damage_description") : null),
           content: (
             <Card>
               <div className="space-y-4">

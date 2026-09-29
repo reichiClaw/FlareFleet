@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { Category, Paginated, VehicleSummary } from "@shared/types";
@@ -6,6 +5,7 @@ import { VEHICLE_STATUSES } from "@shared/types";
 import { api, qs } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
+import { useDebouncedParam } from "../lib/hooks";
 import { Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Pagination, Select, cx } from "../components/ui";
 import { VehicleCard } from "../components/VehicleCard";
 
@@ -19,18 +19,7 @@ export function VehiclesPage() {
   const category = params.get("category_id") ?? "";
   const page = Number(params.get("page") ?? 1);
   const archived = params.get("include_archived") === "1";
-  const [q, setQ] = useState(params.get("q") ?? "");
-
-  useEffect(() => {
-    const h = setTimeout(() => {
-      const next = new URLSearchParams(params);
-      if (q) next.set("q", q);
-      else next.delete("q");
-      next.delete("page");
-      if (next.toString() !== params.toString()) setParams(next, { replace: true });
-    }, 300);
-    return () => clearTimeout(h);
-  }, [q, params, setParams]);
+  const [q, setQ] = useDebouncedParam("q");
 
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);

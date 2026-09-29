@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Language } from "@shared/types";
 
 type Dict = Record<string, string>;
@@ -33,6 +33,7 @@ const de: Dict = {
   "common.no": "Nein",
   "common.optional": "optional",
   "common.required": "Pflichtfeld",
+  "common.invalid_number": "Ungültige Zahl",
   "common.error": "Fehler",
   "common.retry": "Erneut versuchen",
   "common.empty": "Keine Einträge.",
@@ -428,6 +429,7 @@ const en: Dict = {
   "common.no": "No",
   "common.optional": "optional",
   "common.required": "Required",
+  "common.invalid_number": "Invalid number",
   "common.error": "Error",
   "common.retry": "Retry",
   "common.empty": "No entries.",
@@ -806,8 +808,10 @@ export function translate(lang: Language, key: string, params?: Record<string, s
 const I18nContext = createContext<{ lang: Language; t: TFn }>({ lang: "de", t: (k, p) => translate("de", k, p) });
 
 export function I18nProvider({ lang, children }: { lang: Language; children: ReactNode }) {
-  const t: TFn = (k, p) => translate(lang, k, p);
-  return <I18nContext.Provider value={{ lang, t }}>{children}</I18nContext.Provider>;
+  // Stable per language: `t` ends up in effect dependencies (for example the
+  // camera in QrScanner), so a new function on every render would restart them.
+  const value = useMemo(() => ({ lang, t: ((k, p) => translate(lang, k, p)) as TFn }), [lang]);
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useT() {
