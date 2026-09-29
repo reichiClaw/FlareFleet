@@ -128,19 +128,25 @@ export async function storeGenerated(
   return id;
 }
 
-/** Loads staged (not yet attached, not discarded) media by id and checks the kind. */
-export async function loadStaged(env: Env, ids: string[], kind: "photo" | "signature"): Promise<MediaRow[]> {
+/**
+ * Loads staged (not yet attached, not discarded) media by id and checks the kind.
+ * Scoped to the uploader so evidence cannot be pulled from another user's session.
+ */
+export async function loadStaged(env: Env, ids: string[], kind: "photo" | "signature", userId: string): Promise<MediaRow[]> {
   if (!ids.length) return [];
   const unique = [...new Set(ids)];
   const placeholders = unique.map(() => "?").join(",");
   const rows = await all<MediaRow>(
     env.DB,
-    `SELECT * FROM media WHERE id IN (${placeholders}) AND kind = ? AND attached_at IS NULL AND discarded_at IS NULL`,
+    `SELECT * FROM media WHERE id IN (${placeholders}) AND kind = ? AND uploaded_by = ? AND attached_at IS NULL AND discarded_at IS NULL`,
     ...unique,
     kind,
+    userId,
   );
   if (rows.length !== unique.length) throw new ApiError(400, "media_not_found");
-  return rows;
+  // Keep the caller's order so photo captions and damage grouping stay predictable.
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return unique.map((id) => byId.get(id)!);
 }
 
 export function attachStatements(
