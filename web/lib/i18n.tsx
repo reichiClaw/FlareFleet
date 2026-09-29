@@ -327,6 +327,11 @@ const de: Dict = {
   "users.deactivate": "Deaktivieren",
   "users.activate": "Aktivieren",
   "users.must_change": "Muss Passwort ändern",
+  "users.delete": "Benutzer löschen",
+  "users.delete_confirm": "{name} ({email}) wirklich löschen? Der Zugang wird sofort ungültig.",
+  "users.delete_hint": "Hat der Benutzer bereits Protokolle erstellt, bleibt sein Name in diesen Protokollen erhalten – das ist für die Nachweiskette nötig. Die E-Mail-Adresse wird wieder frei.",
+  "users.deleted": "Benutzer gelöscht.",
+  "users.deleted_anonymized": "Benutzer gelöscht. Der Name bleibt in bestehenden Protokollen sichtbar.",
 
   "settings.title": "Einstellungen",
   "settings.general": "Allgemein",
@@ -717,6 +722,11 @@ const en: Dict = {
   "users.deactivate": "Deactivate",
   "users.activate": "Activate",
   "users.must_change": "Must change password",
+  "users.delete": "Delete user",
+  "users.delete_confirm": "Really delete {name} ({email})? Access stops immediately.",
+  "users.delete_hint": "If the user already created protocols, their name stays on those protocols – this is required for the evidence trail. The e-mail address becomes available again.",
+  "users.deleted": "User deleted.",
+  "users.deleted_anonymized": "User deleted. The name remains visible on existing protocols.",
 
   "settings.title": "Settings",
   "settings.general": "General",

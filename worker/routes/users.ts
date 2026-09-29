@@ -22,7 +22,7 @@ function shape(r: Record<string, unknown>) {
 }
 
 users.get("/", async (c) => {
-  const rows = await all<Record<string, unknown>>(c.env.DB, `SELECT ${COLS} FROM users ORDER BY is_active DESC, name`);
+  const rows = await all<Record<string, unknown>>(c.env.DB, `SELECT ${COLS} FROM users WHERE deleted_at IS NULL ORDER BY is_active DESC, name`);
   return c.json({ results: rows.map(shape) });
 });
 
@@ -30,7 +30,7 @@ users.post("/", async (c) => {
   const actor = c.get("user");
   const input = await parseBody(c, UserCreateSchema);
   if (input.role === "super_admin" && actor.role !== "super_admin") throw new ApiError(403, "role_not_allowed");
-  if (await one(c.env.DB, "SELECT 1 AS x FROM users WHERE email = ?", input.email)) throw conflict("email_taken");
+  if (await one(c.env.DB, "SELECT 1 AS x FROM users WHERE email = ? AND deleted_at IS NULL", input.email)) throw conflict("email_taken");
   const id = uid();
   const ts = now();
   const settings = await loadSettings(c.env);
@@ -70,13 +70,13 @@ users.patch("/:id", async (c) => {
   const actor = c.get("user");
   const id = c.req.param("id");
   const input = await parseBody(c, UserUpdateSchema);
-  const target = await one<{ id: string; role: "super_admin" | "admin" | "user"; is_active: number; name: string }>(c.env.DB, "SELECT id, role, is_active, name FROM users WHERE id = ?", id);
+  const target = await one<{ id: string; role: "super_admin" | "admin" | "user"; is_active: number; name: string }>(c.env.DB, "SELECT id, role, is_active, name FROM users WHERE id = ? AND deleted_at IS NULL", id);
   if (!target) throw notFound();
   if (hasRole(target.role, "super_admin") && actor.role !== "super_admin") throw new ApiError(403, "role_not_allowed");
   if (input.role === "super_admin" && actor.role !== "super_admin") throw new ApiError(403, "role_not_allowed");
   const demoting = target.role === "super_admin" && ((input.role && input.role !== "super_admin") || input.is_active === false);
   if (demoting) {
-    const others = await one<{ c: number }>(c.env.DB, "SELECT COUNT(*) AS c FROM users WHERE role = 'super_admin' AND is_active = 1 AND id <> ?", id);
+    const others = await one<{ c: number }>(c.env.DB, "SELECT COUNT(*) AS c FROM users WHERE role = 'super_admin' AND is_active = 1 AND deleted_at IS NULL AND id <> ?", id);
     if ((others?.c ?? 0) === 0) throw conflict("last_super_admin");
   }
   await stmt(
@@ -97,7 +97,7 @@ users.patch("/:id", async (c) => {
 users.post("/:id/reset-password", async (c) => {
   const actor = c.get("user");
   const id = c.req.param("id");
-  const target = await one<{ id: string; role: "super_admin" | "admin" | "user"; email: string; name: string; language: "de" | "en" }>(c.env.DB, "SELECT id, role, email, name, language FROM users WHERE id = ?", id);
+  const target = await one<{ id: string; role: "super_admin" | "admin" | "user"; email: string; name: string; language: "de" | "en" }>(c.env.DB, "SELECT id, role, email, name, language FROM users WHERE id = ? AND deleted_at IS NULL", id);
   if (!target) throw notFound();
   if (target.role === "super_admin" && actor.role !== "super_admin") throw new ApiError(403, "role_not_allowed");
   const settings = await loadSettings(c.env);
@@ -117,6 +117,73 @@ users.post("/:id/reset-password", async (c) => {
   // Invalidate all sessions of that user is not possible with KV listing cheaply; sessions expire in 14 days.
   await audit(c.env.DB, { actor_id: actor.id, actor_label: actor.name, action: "user.password_reset", entity_type: "user", entity_id: id, details: { emailed }, ip: c.get("ip") });
   return c.json({ ok: true, emailed, temporary_password: tempPassword });
+});
+
+/**
+ * Deletes a user. Accounts that never signed off a workflow step are removed
+ * completely; accounts referenced by protocols, loans, damages or imports keep
+ * their row so that history stays intact, but are marked deleted: they vanish
+ * from the app, existing sessions stop working on the next request (loadUser
+ * ignores them) and their e-mail address becomes available again.
+ */
+users.delete("/:id", async (c) => {
+  const actor = c.get("user");
+  const id = c.req.param("id");
+  const target = await one<{ id: string; role: "super_admin" | "admin" | "user"; email: string; name: string }>(
+    c.env.DB,
+    "SELECT id, role, email, name FROM users WHERE id = ? AND deleted_at IS NULL",
+    id,
+  );
+  if (!target) throw notFound();
+  if (target.id === actor.id) throw conflict("cannot_delete_self");
+  if (target.role === "super_admin" && actor.role !== "super_admin") throw new ApiError(403, "role_not_allowed");
+  if (target.role === "super_admin") {
+    const others = await one<{ c: number }>(
+      c.env.DB,
+      "SELECT COUNT(*) AS c FROM users WHERE role = 'super_admin' AND is_active = 1 AND deleted_at IS NULL AND id <> ?",
+      id,
+    );
+    if ((others?.c ?? 0) === 0) throw conflict("last_super_admin");
+  }
+
+  const refs = await one<{ protocols: number; loans: number; damages: number; imports: number }>(
+    c.env.DB,
+    `SELECT (SELECT COUNT(*) FROM protocols WHERE performed_by = ?) AS protocols,
+            (SELECT COUNT(*) FROM loans WHERE created_by = ? OR returned_by = ?) AS loans,
+            (SELECT COUNT(*) FROM damages WHERE reported_by = ? OR resolved_by = ?) AS damages,
+            (SELECT COUNT(*) FROM import_jobs WHERE created_by = ?) AS imports`,
+    id,
+    id,
+    id,
+    id,
+    id,
+    id,
+  );
+  const history = (refs?.protocols ?? 0) + (refs?.loans ?? 0) + (refs?.damages ?? 0) + (refs?.imports ?? 0);
+  const ts = now();
+  if (history === 0) {
+    await stmt(c.env.DB, "DELETE FROM users WHERE id = ?", id).run();
+  } else {
+    await stmt(
+      c.env.DB,
+      `UPDATE users SET deleted_at = ?, is_active = 0, password_hash = NULL, must_change_password = 0,
+         failed_logins = 0, locked_until = NULL, email = ?, updated_at = ? WHERE id = ?`,
+      ts,
+      `deleted-${id}@deleted.invalid`,
+      ts,
+      id,
+    ).run();
+  }
+  await audit(c.env.DB, {
+    actor_id: actor.id,
+    actor_label: actor.name,
+    action: "user.deleted",
+    entity_type: "user",
+    entity_id: id,
+    details: { email: target.email, name: target.name, role: target.role, mode: history === 0 ? "removed" : "anonymized", history },
+    ip: c.get("ip"),
+  });
+  return c.json({ ok: true, mode: history === 0 ? "removed" : "anonymized", history });
 });
 
 export default users;
