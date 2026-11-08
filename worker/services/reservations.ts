@@ -96,9 +96,15 @@ export async function listReservations(env: Env, url: URL) {
   const requested = url.searchParams.get("scope") ?? "upcoming";
   const scope = SCOPES.has(requested) ? requested : "upcoming";
   const vehicleId = url.searchParams.get("vehicle_id");
+  const q = url.searchParams.get("q")?.trim();
   if (vehicleId) {
     where.push("r.vehicle_id = ?");
     params.push(vehicleId);
+  }
+  if (q) {
+    where.push("(r.borrower_name LIKE ? OR co.name LIKE ? OR v.internal_number LIKE ? OR v.manufacturer LIKE ? OR v.model LIKE ? OR v.license_plate LIKE ?)");
+    const like = `%${q}%`;
+    params.push(like, like, like, like, like, like);
   }
   if (scope === "upcoming") {
     where.push("r.status = 'planned' AND r.ends_at >= ?");
