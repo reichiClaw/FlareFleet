@@ -131,7 +131,7 @@ export const LoanCheckoutSchema = z.object({
   borrower_phone: optionalTrimmed(60),
   borrower_email: z.string().trim().max(200).default(""),
   expected_return_at: isoDate,
-  /** Pre-reservation this checkout fulfils; detected from the window when omitted. */
+  /** Pre-reservation this checkout fulfils; detected from the window when omitted, none when null. */
   reservation_id: optionalId,
   /** Loan the vehicle even though someone else reserved part of the window. */
   ignore_reservation: z.boolean().default(false),

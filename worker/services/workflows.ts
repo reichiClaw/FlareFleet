@@ -355,7 +355,9 @@ export function loanCheckout(ctx: WorkflowCtx, vehicleId: string, input: LoanChe
         const w = formatWindow(named, ctx.lang);
         throw conflict("reservation_window", { from: w.from, to: w.to });
       }
-    } else {
+    } else if (input.reservation_id === undefined) {
+      // Only an omitted id asks for detection; null says this loan fulfils none of
+      // the windows, so a due one is a clash that has to be overridden.
       reservation = planned.find((r) => r.starts_at <= ts) ?? null;
     }
     const clashes = planned.filter((r) => r.id !== reservation?.id);
