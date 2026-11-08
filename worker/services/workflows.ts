@@ -19,6 +19,7 @@ import { attachStatements, loadStaged, type MediaRow } from "./media";
 import { getActiveLoan, getVehicle, getVehicleRow, type LoanRow, type VehicleRow } from "./vehicles";
 import { withVehicleLock } from "./lock";
 import { finalizeProtocol } from "./pdf";
+import { formatWindow, fulfilStatement, getReservation, overlapping, type ReservationRow } from "./reservations";
 
 export interface WorkflowCtx {
   env: Env;
@@ -337,8 +338,26 @@ export function loanCheckout(ctx: WorkflowCtx, vehicleId: string, input: LoanChe
       if (!driver) throw badRequest("invalid_reference", { driver_id: "not_found" });
     }
 
-    const loanId = uid();
     const ts = now();
+    // A pre-reservation holds the vehicle for its window: this checkout fulfils the
+    // reservation it falls into, while somebody else's window has to be released
+    // first or overridden on purpose.
+    const planned = await overlapping(ctx.env, vehicleId, ts, input.expected_return_at);
+    let reservation: ReservationRow | null = null;
+    if (input.reservation_id) {
+      reservation = await getReservation(ctx.env, input.reservation_id);
+      if (reservation.vehicle_id !== v.id) throw badRequest("invalid_reference", { reservation_id: "not_found" });
+      if (reservation.status !== "planned") throw conflict("reservation_closed", { status: reservation.status });
+    } else {
+      reservation = planned.find((r) => r.starts_at <= ts) ?? null;
+    }
+    const clashes = planned.filter((r) => r.id !== reservation?.id);
+    if (clashes.length && !input.ignore_reservation) {
+      const w = formatWindow(clashes[0], ctx.lang);
+      throw conflict("reservation_conflict", { borrower: clashes[0].borrower_name, from: w.from, to: w.to });
+    }
+
+    const loanId = uid();
     const loanStatement = stmt(
       ctx.env.DB,
       `INSERT INTO loans (id, vehicle_id, company_id, driver_id, borrower_name, borrower_phone, borrower_email, status, checked_out_at, expected_return_at,
@@ -376,9 +395,16 @@ export function loanCheckout(ctx: WorkflowCtx, vehicleId: string, input: LoanChe
       party: { name: input.borrower_name, phone: input.borrower_phone, email: input.borrower_email, company: company?.name ?? null },
       loanSnapshot: { checked_out_at: ts, expected_return_at: input.expected_return_at },
       preStatements: [loanStatement],
+      extraStatements: reservation ? [fulfilStatement(ctx.env, reservation.id, loanId, ctx.user.id, ts)] : [],
       linkStatements: (protocolId) => [stmt(ctx.env.DB, "UPDATE loans SET checkout_protocol_id = ? WHERE id = ?", protocolId, loanId)],
       auditAction: "loan.checked_out",
-      auditDetails: { loan_id: loanId, borrower: input.borrower_name, expected_return_at: input.expected_return_at },
+      auditDetails: {
+        loan_id: loanId,
+        borrower: input.borrower_name,
+        expected_return_at: input.expected_return_at,
+        ...(reservation ? { reservation_id: reservation.id } : {}),
+        ...(clashes.length ? { overridden_reservations: clashes.map((r) => r.id) } : {}),
+      },
       sendCopyTo: copyRecipients(input.borrower_email, input.send_copy_to),
     });
     return result(ctx, vehicleId, p, loanId);
