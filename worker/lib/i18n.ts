@@ -129,6 +129,7 @@ const de: Dict = {
   "email.overdue.intro": "Folgende Ausleihen sind überfällig:",
   "email.protocol.subject": "{org}: {type} {number} – {vehicle}",
   "email.protocol.body": "Im Anhang finden Sie das Protokoll {number} ({type}) für {vehicle}.\n\n{notes}",
+  "email.protocol.body_no_attachment": "Das Protokoll {number} ({type}) für {vehicle} wurde erstellt. Es ist zu groß für den E-Mail-Anhang und steht hier zum Abruf bereit:\n{link}\n\n{notes}",
 };
 
 const en: Dict = {
@@ -254,6 +255,7 @@ const en: Dict = {
   "email.overdue.intro": "The following loans are overdue:",
   "email.protocol.subject": "{org}: {type} {number} – {vehicle}",
   "email.protocol.body": "Attached is protocol {number} ({type}) for {vehicle}.\n\n{notes}",
+  "email.protocol.body_no_attachment": "Protocol {number} ({type}) for {vehicle} has been created. It is too large to attach and can be downloaded here:\n{link}\n\n{notes}",
 };
 
 const dicts: Record<Language, Dict> = { de, en };
