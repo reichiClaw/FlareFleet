@@ -47,21 +47,22 @@ interface Readings {
   operating_hours: number | null;
 }
 
-function validateReadings(v: VehicleRow, input: { odometer_km?: number | null; operating_hours?: number | null }, required: boolean): Readings {
+/**
+ * Meter readings are documentation, not a precondition: a workflow must never be
+ * blocked because nobody could read the dashboard. Only impossible values are
+ * refused — a meter the category does not have, or a reading that went backwards.
+ */
+function validateReadings(v: VehicleRow, input: { odometer_km?: number | null; operating_hours?: number | null }): Readings {
   const req = meterRequirements(v.meter_mode);
   const odo = input.odometer_km ?? null;
   const hrs = input.operating_hours ?? null;
   if (!req.odometer) {
     if (odo != null) throw badRequest("odometer_not_applicable", { odometer_km: "not_applicable" });
-  } else if (required && odo == null) {
-    throw badRequest("odometer_required", { odometer_km: "required" });
   } else if (odo != null && v.odometer_km != null && odo < v.odometer_km) {
     throw badRequest("reading_decreased", { odometer_km: "decreased" }, { previous: v.odometer_km });
   }
   if (!req.hours) {
     if (hrs != null) throw badRequest("hours_not_applicable", { operating_hours: "not_applicable" });
-  } else if (required && hrs == null) {
-    throw badRequest("hours_required", { operating_hours: "required" });
   } else if (hrs != null && v.operating_hours != null && hrs < v.operating_hours) {
     throw badRequest("reading_decreased", { operating_hours: "decreased" }, { previous: v.operating_hours });
   }
@@ -277,7 +278,7 @@ export function checkIn(ctx: WorkflowCtx, vehicleId: string, input: CheckInInput
   return withVehicleLock(ctx.env, vehicleId, async () => {
     const v = await getVehicleRow(ctx.env, vehicleId);
     assertStatus(v, ["announced"]);
-    const readings = validateReadings(v, input, false);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, ctx.settings.min_photos_check_in, ctx.settings.signature_required_check_in);
     if (input.condition === "damaged" && input.damages.length === 0) throw badRequest("damage_description_required", { damages: "required" });
     const damagePhotos = await loadDamagePhotos(ctx, input.damages);
@@ -322,7 +323,7 @@ export function loanCheckout(ctx: WorkflowCtx, vehicleId: string, input: LoanChe
     assertStatus(v, ["available"]);
     if (await getActiveLoan(ctx.env, vehicleId)) throw conflict("active_loan");
     if (new Date(input.expected_return_at).getTime() <= Date.now()) throw badRequest("expected_return_past", { expected_return_at: "past" });
-    const readings = validateReadings(v, input, true);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, ctx.settings.min_photos_loan, false);
 
     let company: { name: string; company_type: string } | null = null;
@@ -393,7 +394,7 @@ export function loanReturn(ctx: WorkflowCtx, vehicleId: string, input: LoanRetur
     assertStatus(v, ["loaned"]);
     const loan = await getActiveLoan(ctx.env, vehicleId);
     if (!loan) throw conflict("no_active_loan");
-    const readings = validateReadings(v, input, true);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, ctx.settings.min_photos_return, ctx.settings.signature_required_return);
     if (input.condition === "damaged" && input.damages.length === 0) throw badRequest("damage_description_required", { damages: "required" });
     const damagePhotos = await loadDamagePhotos(ctx, input.damages);
@@ -447,7 +448,7 @@ export function checkOut(ctx: WorkflowCtx, vehicleId: string, input: CheckOutInp
     const v = await getVehicleRow(ctx.env, vehicleId);
     assertStatus(v, ["available", "damaged", "maintenance"]);
     if (await getActiveLoan(ctx.env, vehicleId)) throw conflict("active_loan");
-    const readings = validateReadings(v, input, true);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, ctx.settings.min_photos_check_out, ctx.settings.signature_required_check_out);
     if (input.condition === "damaged" && input.damages.length === 0) throw badRequest("damage_description_required", { damages: "required" });
     const damagePhotos = await loadDamagePhotos(ctx, input.damages);
@@ -492,7 +493,7 @@ export function maintenanceStart(ctx: WorkflowCtx, vehicleId: string, input: Mai
     const v = await getVehicleRow(ctx.env, vehicleId);
     assertStatus(v, ["available", "damaged"]);
     if (await getActiveLoan(ctx.env, vehicleId)) throw conflict("active_loan");
-    const readings = validateReadings(v, input, false);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, 0, false);
     const p = await commitProtocol(ctx, {
       vehicle: v,
@@ -517,7 +518,7 @@ export function maintenanceEnd(ctx: WorkflowCtx, vehicleId: string, input: Maint
   return withVehicleLock(ctx.env, vehicleId, async () => {
     const v = await getVehicleRow(ctx.env, vehicleId);
     assertStatus(v, ["maintenance"]);
-    const readings = validateReadings(v, input, false);
+    const readings = validateReadings(v, input);
     const { photos, signature } = await loadEvidence(ctx, input.photo_ids, input.signature_id, 0, false);
     const ts = now();
     // Only count damages that are really open for this vehicle, otherwise an unknown or

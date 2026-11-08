@@ -128,7 +128,7 @@ export function CheckInPage() {
         {
           key: "details",
           title: t("wf.step_details"),
-          validate: () => validateReadings(readings, v, false, t),
+          validate: () => validateReadings(readings, v, t),
           content: (
             <Card>
               <div className="space-y-4">
@@ -293,7 +293,7 @@ export function LoanPage() {
           validate: () => {
             if (!name.trim()) return `${t("wf.borrower_name")}: ${t("common.required")}`;
             if (!returnAt || new Date(returnAt).getTime() <= Date.now()) return t("wf.expected_return_at");
-            return validateReadings(readings, v, true, t);
+            return validateReadings(readings, v, t);
           },
           content: (
             <Card>
@@ -342,7 +342,7 @@ export function LoanPage() {
                     ))}
                   </div>
                 </div>
-                <ReadingsFields vehicle={v} value={readings} onChange={setReadings} required />
+                <ReadingsFields vehicle={v} value={readings} onChange={setReadings} />
               </div>
             </Card>
           ),
@@ -440,7 +440,7 @@ export function ReturnPage() {
         {
           key: "details",
           title: t("wf.step_details"),
-          validate: () => validateReadings(readings, v, true, t),
+          validate: () => validateReadings(readings, v, t),
           content: (
             <Card>
               {loan && (
@@ -464,7 +464,7 @@ export function ReturnPage() {
                   )}
                 </div>
               )}
-              <ReadingsFields vehicle={v} value={readings} onChange={setReadings} required />
+              <ReadingsFields vehicle={v} value={readings} onChange={setReadings} />
             </Card>
           ),
         },
@@ -586,7 +586,7 @@ export function CheckOutPage() {
         {
           key: "details",
           title: t("wf.step_details"),
-          validate: () => validateReadings(readings, v, true, t),
+          validate: () => validateReadings(readings, v, t),
           content: (
             <Card>
               <div className="space-y-4">
@@ -605,7 +605,7 @@ export function CheckOutPage() {
                     <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} />
                   </Field>
                 </div>
-                <ReadingsFields vehicle={v} value={readings} onChange={setReadings} required />
+                <ReadingsFields vehicle={v} value={readings} onChange={setReadings} />
                 <Toggle checked={archive} onChange={setArchive} label={t("wf.archive_after_checkout")} />
               </div>
             </Card>
@@ -703,7 +703,7 @@ export function MaintenanceStartPage() {
         {
           key: "details",
           title: t("wf.step_details"),
-          validate: () => (!reason.trim() ? `${t("wf.reason")}: ${t("common.required")}` : validateReadings(readings, v, false, t)),
+          validate: () => (!reason.trim() ? `${t("wf.reason")}: ${t("common.required")}` : validateReadings(readings, v, t)),
           content: (
             <Card>
               <div className="space-y-4">
@@ -753,7 +753,7 @@ export function MaintenanceEndPage() {
         {
           key: "details",
           title: t("wf.step_details"),
-          validate: () => validateReadings(readings, v, false, t),
+          validate: () => validateReadings(readings, v, t),
           content: (
             <Card>
               <div className="space-y-4">
