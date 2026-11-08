@@ -112,11 +112,15 @@ export async function listReservations(env: Env, url: URL) {
   return { ...res, results: res.results.map((r) => withVehicle(r, ts)) };
 }
 
+/**
+ * Planned windows come soonest first, because callers treat the first row as the
+ * next hand-over; the full list is a history and reads newest first.
+ */
 export async function listForVehicle(env: Env, vehicleId: string, onlyPlanned = false): Promise<Reservation[]> {
   const ts = now();
   const rows = await all<ReservationRow>(
     env.DB,
-    `${RESERVATION_SELECT} WHERE r.vehicle_id = ?${onlyPlanned ? " AND r.status = 'planned' AND r.ends_at >= ?" : ""} ORDER BY r.starts_at DESC LIMIT 50`,
+    `${RESERVATION_SELECT} WHERE r.vehicle_id = ?${onlyPlanned ? " AND r.status = 'planned' AND r.ends_at >= ?" : ""} ORDER BY ${onlyPlanned ? "r.starts_at" : "r.starts_at DESC"} LIMIT 50`,
     ...(onlyPlanned ? [vehicleId, ts] : [vehicleId]),
   );
   return rows.map((r) => toReservation(r, ts));
